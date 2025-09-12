@@ -1,4 +1,4 @@
-import { createWeaponCard } from './utils.js';
+import { createWeaponCard, summarizeBattleHistory, arraysEqual, colorize } from './utils.js';
 
 function adjustColor(color, percent) {
   if (!color) return '#ffffff';
@@ -31,7 +31,7 @@ function adjustColor(color, percent) {
 }
 
 const room = new WebsimSocket();
-async function generateWeapon() {
+window.generateWeapon = async function () {
   const weaponName = document.getElementById('weaponName').value;
   const weaponDescription = document.getElementById('weaponDescription').value || '';
   const weaponContext = document.getElementById('weaponContext').value || '';
@@ -58,7 +58,7 @@ async function generateWeapon() {
             ${weaponDescription ? ` with the following description: ${weaponDescription}` : ''}
             ${allElements ? ` with ${allElements} element` : ''}
             ${weaponRarity ? ` with ${weaponRarity} rarity` : ''}
-            ${weaponContext ? `\nAdditional context: ${weaponContext}` : ''}.
+            ${weaponContext ? `\nAdditional context: ${weaponContext}` : '.
             Include damage, element (${allElements ? `must be ${allElements}` : `from: None, Fire, Ice, Water, Plant, Electric, Darkness, Light, Earth, Wind, Noble, Poison, Cute, Undead, Arcane, Transformation, Reality, Spirit, Inanimate, Metal, Animal`}), 
             regular attack (REQUIRED for ALL weapons), passive effects (only for Uncommon+ weapons), appearance, rarity (${weaponRarity ? `must be exactly ${weaponRarity}` : 'from: Common, Uncommon, Rare, Epic, Super-Epic, Legendary, Mythical, Transcendent'}), price in gold, and a short, impactful flavor blurb.
             The weapon's name and abilities should be thematically aligned with the provided description if one was given.
@@ -113,7 +113,10 @@ room.collection('weapons').subscribe(weapons => {
     const weaponCard = selectedWeapon.children[0];
     const weaponId = weaponCard.dataset.weaponId;
     if (weaponId) {
-      updateWeaponBattleLogs(weaponId);
+      const weapon = room.collection('weapons').get(weaponId);
+      if (weapon) {
+          updateWeaponBattleLogs(weaponId, weapon.battleLogs || []);
+      }
     }
   }
 });
@@ -243,52 +246,45 @@ function displayWeapons(weapons) {
   });
 }
 
-function updateWeaponBattleLogs(weaponId) {
-  const logContainer = document.querySelector(`.weapon-battle-logs[data-weapon-id="${weaponId}"] .battle-logs-list`);
+function updateWeaponBattleLogs(weaponId, battleLogs) {
+  const logContainer = document.querySelector(`#battle-logs-${weaponId} .battle-logs-list`);
   if (!logContainer) return;
 
-  const weapon = room.collection('weapons').getList().find(w => w.id === weaponId);
-  if (!weapon || !weapon.battleLogs) {
+  if (!battleLogs || battleLogs.length === 0) {
     logContainer.innerHTML = '<p>No battles recorded yet.</p>';
     return;
   }
 
-  const logs = weapon.battleLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const logs = battleLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const weapon = room.collection('weapons').get(weaponId);
   
   logContainer.innerHTML = logs.map(log => `
-    <div class="battle-log-item">
-      <p>${log.isTeamBattle ? 'Team Battle' : 'Duel'} at ${log.location} (${log.goreLevel})</p>
-      <p>Result: ${log.winner === weapon.name ? 'Victory' : 'Defeat'}</p>
+    <div class="weapon-battle-log">
+      <div class="battle-outcome ${log.winner === weapon.name ? 'victory' : 'defeat'}">
+        ${log.winner === weapon.name ? 'Victory' : 'Defeat'} at ${log.location} (${log.goreLevel})
+      </div>
       <div class="battle-description">${log.description}</div>
-      <small>${new Date(log.timestamp).toLocaleString()}</small>
+      <div class="battle-details">
+        <small>${new Date(log.timestamp).toLocaleString()}</small>
+      </div>
     </div>
   `).join('');
 }
 
-room.collection('weapons').subscribe(weapons => {
-  displayWeapons(weapons);
-  
-  // Update battle logs for displayed weapon
+window.updateBattleLogsForDisplayedWeapon = function () {
   const selectedWeapon = document.getElementById('selectedWeapon');
   if (selectedWeapon && selectedWeapon.children.length) {
     const weaponCard = selectedWeapon.children[0];
     const weaponId = weaponCard.dataset.weaponId;
     if (weaponId) {
-      updateWeaponBattleLogs(weaponId);
-    }
-  }
-});
-function updateBattleLogsForDisplayedWeapon() {
-  const selectedWeapon = document.getElementById('selectedWeapon');
-  if (selectedWeapon && selectedWeapon.children.length) {
-    const weaponCard = selectedWeapon.children[0];
-    const weaponId = weaponCard.dataset.weaponId;
-    if (weaponId) {
-      updateWeaponBattleLogs(weaponId);
+      const weapon = room.collection('weapons').get(weaponId);
+      if (weapon) {
+          updateWeaponBattleLogs(weaponId, weapon.battleLogs || []);
+      }
     }
   }
 }
-async function startBattle() {
+window.startBattle = async function () {
   const weapon1Id = document.getElementById('weapon1').value;
   const weapon2Id = document.getElementById('weapon2').value;
   const goreLevel = document.getElementById('goreIntensity').value;
@@ -299,9 +295,6 @@ async function startBattle() {
   }
   document.getElementById('battleLoading').style.display = 'block';
   document.getElementById('winnerAnnouncement').style.display = 'none';
-  const revealBtn = document.createElement('button');
-  revealBtn.className = 'reveal-winner-btn';
-  revealBtn.textContent = 'Reveal Outcome';
   const weapons = room.collection('weapons').getList();
   const weapon1 = weapons.find(w => w.id === weapon1Id);
   const weapon2 = weapons.find(w => w.id === weapon2Id);
@@ -360,6 +353,9 @@ async function startBattle() {
     const announcement = document.getElementById('winnerAnnouncement');
     announcement.innerHTML = '';
     announcement.style.display = 'none';
+    const revealBtn = document.createElement('button');
+    revealBtn.className = 'reveal-winner-btn';
+    revealBtn.textContent = 'Reveal Outcome';
     revealBtn.onclick = async () => {
       announcement.style.display = 'block';
       let winnerWeapon;
@@ -395,7 +391,10 @@ async function startBattle() {
         const weaponCard = selectedWeapon.children[0];
         const weaponId = weaponCard.dataset.weaponId;
         if (weaponId === weapon1.id || weaponId === weapon2.id) {
-          updateWeaponBattleLogs(weaponId);
+          const weapon = room.collection('weapons').get(weaponId);
+          if (weapon) {
+             updateWeaponBattleLogs(weaponId, weapon.battleLogs);
+          }
         }
       }
     };
@@ -422,7 +421,7 @@ function getRarityColor(rarity) {
   return colors[rarity];
 }
 
-async function startTeamBattle() {
+window.startTeamBattle = async function () {
   const invalidTeams = teams.filter(team => team.fighters.length === 0);
   if (invalidTeams.length > 0) {
     alert('Each team must have at least one fighter!');
@@ -573,14 +572,7 @@ async function startTeamBattle() {
   }
 }
 
-function colorize(text, weapons) {
-  let colorized = text;
-  weapons.forEach(weapon => {
-    const regex = new RegExp(weapon.name, 'g');
-    colorized = colorized.replace(regex, `<span class="element-${weapon.element}" style="color: var(--${weapon.rarity.toLowerCase()}-color)">${weapon.name}</span>`);
-  });
-  return colorized;
-}
+window.colorize = colorize;
 
 let teams = [{
   id: 'alpha',
@@ -594,7 +586,7 @@ let teams = [{
   defaultWeapon: null
 }];
 
-function setDefaultWeapon(teamId, weaponId) {
+window.setDefaultWeapon = function (teamId, weaponId) {
   const team = teams.find(t => t.id === teamId);
   if (team) {
     team.defaultWeapon = weaponId;
@@ -661,7 +653,7 @@ function renderTeams() {
   });
 }
 
-function addTeam() {
+window.addTeam = function () {
   const id = `team${teams.length + 1}`;
   teams.push({
     id,
@@ -672,12 +664,12 @@ function addTeam() {
   renderTeams();
 }
 
-function removeTeam(teamId) {
+window.removeTeam = function (teamId) {
   teams = teams.filter(team => team.id !== teamId);
   renderTeams();
 }
 
-function addFighter(teamId) {
+window.addFighter = function (teamId) {
   const team = teams.find(t => t.id === teamId);
   if (team) {
     team.fighters.push(team.defaultWeapon || null);
@@ -685,7 +677,7 @@ function addFighter(teamId) {
   }
 }
 
-function removeFighter(teamId, fighterIndex) {
+window.removeFighter = function (teamId, fighterIndex) {
   const team = teams.find(t => t.id === teamId);
   if (team && team.fighters.length > 1) {
     team.fighters.splice(fighterIndex, 1);
@@ -693,7 +685,7 @@ function removeFighter(teamId, fighterIndex) {
   }
 }
 
-function renameTeam(teamId, newName) {
+window.renameTeam = function (teamId, newName) {
   const team = teams.find(t => t.id === teamId);
   if (team) {
     team.name = newName.trim() || `Team ${teams.indexOf(team) + 1}`;
@@ -712,7 +704,7 @@ function getTeamWeaponSelections() {
   }));
 }
 
-async function sendMessage() {
+window.sendMessage = async function () {
   const input = document.getElementById('chatInput');
   const message = input.value.trim();
   if (message) {
@@ -764,7 +756,7 @@ document.getElementById('chatInput').addEventListener('keypress', e => {
   }
 });
 
-async function deleteWeapon(weaponId) {
+window.deleteWeapon = async function (weaponId) {
   if (confirm('Are you sure you want to delete this weapon?')) {
     try {
       await room.collection('weapons').delete(weaponId);
@@ -812,7 +804,7 @@ function getElementEmoji(element) {
 let customElements = {};
 let customFunctions = new Set();
 
-async function addNewElement() {
+window.addNewElement = async function () {
   if (room.party.client.username !== 'lak04171') return;
   const name = document.getElementById('newElementName').value.trim();
   const color = document.getElementById('newElementColor').value.trim();
@@ -831,7 +823,7 @@ async function addNewElement() {
   document.getElementById('newElementEmoji').value = '';
 }
 
-async function addNewFunction() {
+window.addNewFunction = async function () {
   if (room.party.client.username !== 'lak04171') return;
   const name = document.getElementById('newFunctionName').value.trim();
   if (!name) {
@@ -1042,7 +1034,7 @@ function showAdminButton() {
   });
 }
 
-function toggleChat() {
+window.toggleChat = function () {
   const chatContainer = document.querySelector('.chat-container');
   const chatToggle = document.querySelector('.chat-toggle');
   chatContainer.classList.toggle('visible');
@@ -1053,11 +1045,11 @@ function toggleChat() {
     if (notification) {
       notification.style.display = 'none';
     }
-    const lastReadMessageTime = new Date();
+    lastReadMessageTime = new Date();
   }
 }
 
-async function removeElement() {
+window.removeElement = async function () {
   if (room.party.client.username !== 'lak04171') return;
   const elementSelect = document.getElementById('elementToRemove');
   const elementId = elementSelect.value;
@@ -1075,7 +1067,7 @@ async function removeElement() {
   }
 }
 
-async function submitSuggestion() {
+window.submitSuggestion = async function () {
   const input = document.getElementById('suggestionInput');
   const suggestion = input.value.trim();
   if (suggestion) {
@@ -1087,7 +1079,7 @@ async function submitSuggestion() {
   }
 }
 
-async function removeFunction() {
+window.removeFunction = async function () {
   if (room.party.client.username !== 'lak04171') return;
   const functionSelect = document.getElementById('functionToRemove');
   const functionId = functionSelect.value;
@@ -1105,7 +1097,7 @@ async function removeFunction() {
   }
 }
 
-function toggleAdminDropdown() {
+window.toggleAdminDropdown = function () {
   const dropdownContent = document.querySelector('.admin-dropdown-content');
   dropdownContent.classList.toggle('show');
   window.onclick = function (event) {
@@ -1122,7 +1114,7 @@ function toggleAdminDropdown() {
 
 showAdminButton();
 
-function editWeapon(weaponId) {
+window.editWeapon = function (weaponId) {
   const weapons = room.collection('weapons').getList();
   const weapon = weapons.find(w => w.id === weaponId);
   if (!weapon) return;
@@ -1170,7 +1162,7 @@ function arraysEqual(a, b) {
   return true;
 }
 
-async function addSuggestionTag(suggestionId, tag) {
+window.addSuggestionTag = async function (suggestionId, tag) {
   if (room.party.client.username !== 'lak04171') return;
   const suggestion = room.collection('suggestions').getList().find(s => s.id === suggestionId);
   if (!suggestion) return;
@@ -1185,7 +1177,7 @@ async function addSuggestionTag(suggestionId, tag) {
   }
 }
 
-async function removeSuggestionTag(suggestionId, tag) {
+window.removeSuggestionTag = async function (suggestionId, tag) {
   if (room.party.client.username !== 'lak04171') return;
   const suggestion = room.collection('suggestions').getList().find(s => s.id === suggestionId);
   if (!suggestion) return;
@@ -1287,7 +1279,7 @@ room.collection('suggestion-comments').subscribe(() => {
   }
 });
 
-async function publishUpdate() {
+window.publishUpdate = async function () {
   if (room.party.client.username !== 'lak04171') return;
   const formState = {
     weaponName: document.getElementById('weaponName').value,
@@ -1375,53 +1367,6 @@ async function publishBattleLog(battleDesc, winner, teams = null) {
   await room.collection('battle-logs').create(battleLog);
 }
 
-function updateWeaponBattleLogs(weaponId) {
-  const logContainer = document.querySelector(`.weapon-battle-logs[data-weapon-id="${weaponId}"] .battle-logs-list`);
-  if (!logContainer) return;
-
-  const weapon = room.collection('weapons').getList().find(w => w.id === weaponId);
-  if (!weapon || !weapon.battleLogs) {
-    logContainer.innerHTML = '<p>No battles recorded yet.</p>';
-    return;
-  }
-
-  const logs = weapon.battleLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  
-  logContainer.innerHTML = logs.map(log => `
-    <div class="battle-log-item">
-      <p>${log.isTeamBattle ? 'Team Battle' : 'Duel'} at ${log.location} (${log.goreLevel})</p>
-      <p>Result: ${log.winner === weapon.name ? 'Victory' : 'Defeat'}</p>
-      <div class="battle-description">${log.description}</div>
-      <small>${new Date(log.timestamp).toLocaleString()}</small>
-    </div>
-  `).join('');
-}
-
-room.collection('weapons').subscribe(weapons => {
-  displayWeapons(weapons);
-  
-  // Update battle logs for displayed weapon
-  const selectedWeapon = document.getElementById('selectedWeapon');
-  if (selectedWeapon && selectedWeapon.children.length) {
-    const weaponCard = selectedWeapon.children[0];
-    const weaponId = weaponCard.dataset.weaponId;
-    if (weaponId) {
-      updateWeaponBattleLogs(weaponId);
-    }
-  }
-});
-
-function summarizeBattleHistory(battleLogs) {
-  if (!battleLogs || battleLogs.length === 0) {
-    return "No previous battle experience";
-  }
-
-  const victories = battleLogs.filter(log => log.winner === battleLogs[0].weaponName).length;
-  const winRate = Math.round((victories / battleLogs.length) * 100);
-  
-  return `${battleLogs.length} battles fought with a ${winRate}% win rate. Fighter has shown ${victories > battleLogs.length / 2 ? 'great prowess' : 'room for improvement'} in combat.`;
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('weaponSearch');
   if (searchInput) {
@@ -1439,7 +1384,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-async function addComment(suggestionId) {
+window.addComment = async function (suggestionId) {
   const input = document.getElementById(`comment-${suggestionId}`);
   const text = input.value.trim();
   if (text) {
@@ -1452,7 +1397,7 @@ async function addComment(suggestionId) {
   }
 }
 
-async function toggleLike(suggestionId) {
+window.toggleLike = async function (suggestionId) {
   const existingLike = room.collection('suggestion-likes').getList().find(l => l.suggestionId === suggestionId && l.username === room.party.client.username);
   if (existingLike) {
     await room.collection('suggestion-likes').delete(existingLike.id);
@@ -1485,7 +1430,7 @@ function updateMergeWeaponSelects() {
   });
 }
 
-function validateMergeSelection() {
+window.validateMergeSelection = function () {
   const weapon1 = document.getElementById('mergeWeapon1').value;
   const weapon2 = document.getElementById('mergeWeapon2').value;
   if (weapon1 && weapon2 && weapon1 === weapon2) {
@@ -1536,7 +1481,7 @@ function updateTeamWeaponSelects() {
   }
 }
 
-function toggleBattleMode(mode) {
+window.toggleBattleMode = function (mode) {
   const duelMode = document.getElementById('duelMode');
   const teamMode = document.getElementById('teamMode');
   const buttons = document.querySelectorAll('.battle-mode-btn');
@@ -1565,7 +1510,7 @@ let adventureState = {
   isEnded: false
 };
 
-async function mergeWeapons() {
+window.mergeWeapons = async function () {
   const weapon1Id = document.getElementById('mergeWeapon1').value;
   const weapon2Id = document.getElementById('mergeWeapon2').value;
   if (!weapon1Id || !weapon2Id) {
@@ -1648,7 +1593,7 @@ room.collection('weapon-comments').subscribe(comments => {
 });
 
 function updateWeaponComments(weaponId, comments) {
-  const weaponComments = document.querySelector(`.weapon-comments[data-weapon-id="${weaponId}"]`);
+  const weaponComments = document.querySelector(`.weapon-card[data-weapon-id="${weaponId}"] .weapon-comments`);
   if (!weaponComments) return;
   const relevantComments = comments.filter(c => c.weaponId === weaponId).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   weaponComments.innerHTML = `
@@ -1667,8 +1612,8 @@ function updateWeaponComments(weaponId, comments) {
   `;
 }
 
-async function addWeaponComment(weaponId) {
-  const input = document.querySelector(`.weapon-comments[data-weapon-id="${weaponId}"] .weapon-comment-input`);
+window.addWeaponComment = async function (weaponId) {
+  const input = document.querySelector(`.weapon-card[data-weapon-id="${weaponId}"] .weapon-comment-input`);
   const text = input.value.trim();
   if (text) {
     await room.collection('weapon-comments').create({
@@ -1722,7 +1667,7 @@ function updateWeaponSelects() {
   }
 }
 
-function switchMode(mode) {
+window.switchMode = function (mode) {
   const body = document.body;
   const inputSection = document.querySelector('.input-section');
   const battleSection = document.querySelector('.battle-section');
@@ -1798,7 +1743,7 @@ function switchMode(mode) {
   }
 }
 
-async function downloadWeapon(weaponId) {
+window.downloadWeapon = async function (weaponId) {
   const weapons = room.collection('weapons').getList();
   const weapon = weapons.find(w => w.id === weaponId);
   if (!weapon) return;
@@ -1815,7 +1760,7 @@ async function downloadWeapon(weaponId) {
   document.body.removeChild(a);
 }
 
-async function uploadWeapon(event) {
+window.uploadWeapon = async function (event) {
   const file = event.target.files[0];
   if (!file) return;
 
@@ -1847,7 +1792,7 @@ async function uploadWeapon(event) {
   event.target.value = '';
 }
 
-function viewWeaponStats(index) {
+window.viewWeaponStats = function (index) {
   const statsDiv = document.getElementById('selectedWeaponStats');
   const weapon = playerInventory[index];
   if (statsDiv.dataset.currentIndex === index.toString()) {
@@ -1870,7 +1815,7 @@ function viewWeaponStats(index) {
   statsDiv.dataset.currentIndex = index;
 }
 
-async function startNewAdventure() {
+window.startNewAdventure = async function () {
   document.getElementById('adventureText').innerHTML = 'Starting adventure...';
   document.getElementById('customAction').disabled = false;
   document.getElementById('submitActionBtn').disabled = false;
@@ -1971,7 +1916,7 @@ function updateInventory() {
   document.getElementById('selectedWeaponStats').classList.remove('visible');
 }
 
-async function submitCustomAction() {
+window.submitCustomAction = async function () {
   const actionInput = document.getElementById('customAction');
   const submitBtn = document.getElementById('submitActionBtn');
   const processingDiv = document.getElementById('actionProcessing');
@@ -2104,7 +2049,7 @@ async function submitCustomAction() {
   }
 }
 
-async function submitCode() {
+window.submitCode = async function () {
   const code = document.getElementById('codeInput').value.trim().toLowerCase();
   switch (code) {
     case 'emo':
@@ -2139,4 +2084,13 @@ async function submitCode() {
       alert('Invalid code!');
   }
   document.getElementById('codeInput').value = '';
+}
+
+window.toggleBattleLogs = function(weaponId) {
+    const header = document.querySelector(`.weapon-card[data-weapon-id="${weaponId}"] .battle-logs-header`);
+    const content = document.getElementById(`battle-logs-${weaponId}`);
+    if (header && content) {
+        header.classList.toggle('collapsed');
+        content.classList.toggle('collapsed');
+    }
 }

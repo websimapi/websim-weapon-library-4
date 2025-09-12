@@ -137,22 +137,14 @@ export function createWeaponCard(weapon, room, detailed = false) {
         <div class="battle-logs-header" onclick="toggleBattleLogs('${weapon.id}')">
           <span class="toggle-icon">▼</span>
           <h4>Battle History</h4>
-          <span class="battle-count">${weapon.battleLogs?.length || 0} battles</span>
         </div>
-        <div class="battle-logs-content" id="battle-logs-${weapon.id}">
+        <div class="battle-logs-content collapsed" id="battle-logs-${weapon.id}">
           <div class="battle-logs-list">
-            ${weapon.battleLogs ? weapon.battleLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(log => `
-              <div class="weapon-battle-log">
-                <div class="battle-outcome ${log.winner === weapon.name ? 'victory' : 'defeat'}">
-                  ${log.winner === weapon.name ? 'Victory' : 'Defeat'} at ${log.location} (${log.goreLevel})
-                </div>
-                <div class="battle-description">${log.description}</div>
-                <div class="battle-details">
-                  <small>${new Date(log.timestamp).toLocaleString()}</small>
-                </div>
-              </div>
-            `).join('') : '<p>No battles recorded yet.</p>'}
+             <!-- Battle logs are loaded dynamically -->
           </div>
+        </div>
+        <div class="weapon-comments" data-weapon-id="${weapon.id}">
+            <!-- Comments are loaded dynamically -->
         </div>
       `;
   }
