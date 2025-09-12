@@ -1,3 +1,5 @@
+import { createWeaponCard } from './utils.js';
+
 function adjustColor(color, percent) {
   if (!color) return '#ffffff';
   
@@ -21,12 +23,13 @@ function adjustColor(color, percent) {
           R = Math.min(255, Math.max(0, (num >> 16) + amt)),
           G = Math.min(255, Math.max(0, (num >> 8 & 0x00FF) + amt)),
           B = Math.min(255, Math.max(0, (num & 0x0000FF) + amt));
-    return '#' + (0x1000000 + (R * 0x10000) + (G * 0x100) + B).toString(16).slice(1);
+    return '#' + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
   } catch (e) {
     console.error('Error adjusting color:', e);
     return '#ffffff';
   }
 }
+
 const room = new WebsimSocket();
 async function generateWeapon() {
   const weaponName = document.getElementById('weaponName').value;
@@ -99,138 +102,6 @@ async function generateWeapon() {
   } finally {
     document.getElementById('loading').style.display = 'none';
   }
-}
-function createWeaponCard(weapon, detailed = false) {
-  let html = `
-    <h3>${weapon.name}</h3>
-    <div class="flavor-blurb">${weapon.flavorBlurb}</div>
-    ${weapon.description ? `<p>Description: ${weapon.description}</p>` : ''}
-    <p>Damage: <span class="number">${weapon.damage}</span></p>
-    <p class="rarity-${weapon.rarity}">Rarity: ${weapon.rarity}</p>
-    <p>Price: <span class="number">${weapon.price}</span> gold</p>
-    <p class="element-${weapon.element}">Element: ${getElementEmoji(weapon.element)} ${weapon.element}</p>
-    <p>Appearance: ${weapon.appearance}</p>
-    <p>Regular Attack: ${weapon.specialAbility}</p>
-  `;
-  
-  if (weapon.rarity !== 'Common' && weapon.passiveEffects) {
-    html += `<p>Passive: ${weapon.passiveEffects}</p>`;
-  }
-
-  if (weapon.additionalAbilities) {
-    weapon.additionalAbilities.forEach(ability => {
-      html += `<p>Additional Ability: ${ability}</p>`;
-    });
-  }
-
-  if (weapon.specialZones) {
-    weapon.specialZones.forEach(zone => {
-      html += `<p>Special Zone: ${zone}</p>`;
-    });
-  }
-
-  if (weapon.uniqueTraits) {
-    weapon.uniqueTraits.forEach(trait => {
-      html += `<p>Unique Trait: ${trait}</p>`;
-    });
-  }
-
-  html += `
-    <button class="edit-btn" onclick="editWeapon('${weapon.id}')">✎</button>
-    <button class="download-btn" onclick="downloadWeapon('${weapon.id}')">⭳</button>
-    <button class="delete-btn" onclick="deleteWeapon('${weapon.id}')">×</button>
-    <div class="battle-logs-header" onclick="toggleBattleLogs('${weapon.id}')">
-      <span class="toggle-icon">▼</span>
-      <h4>Battle History</h4>
-      <span class="battle-count">${weapon.battleLogs?.length || 0} battles</span>
-    </div>
-    <div class="battle-logs-content" id="battle-logs-${weapon.id}">
-      <div class="battle-logs-list">
-        ${weapon.battleLogs ? weapon.battleLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map(log => `
-          <div class="weapon-battle-log">
-            <div class="battle-outcome ${log.winner === weapon.name ? 'victory' : 'defeat'}">
-              ${log.winner === weapon.name ? 'Victory' : 'Defeat'} at ${log.location} (${log.goreLevel})
-            </div>
-            <div class="battle-description">${log.description}</div>
-            <div class="battle-details">
-              <small>${new Date(log.timestamp).toLocaleString()}</small>
-            </div>
-          </div>
-        `).join('') : '<p>No battles recorded yet.</p>'}
-      </div>
-    </div>
-  `;
-  if (weapon.rarity === 'Transcendent') {
-    const elementColors = {
-      'None': '#ffffff',
-      'Fire': '#ff4444',
-      'Ice': '#00ffff', 
-      'Water': '#4444ff',
-      'Plant': '#44ff44',
-      'Electric': '#ffff44',
-      'Darkness': '#4b0082',
-      'Light': '#ffff80',
-      'Earth': '#8b4513',
-      'Wind': '#008080',
-      'Poison': '#800080',
-      'Cute': '#FFB6C1',
-      'Noble': '#9370DB',
-      'Undead': '#808000',
-      'Arcane': '#8B008B',
-      'Transformation': '#B8860B',
-      'Reality': '#FF1493',
-      'Spirit': '#98FB98',
-      'Inanimate': '#00008B',
-      'Metal': '#4A4A4A',
-      'Animal': '#654321'
-    };
-
-    // Add custom element colors
-    const customElements = {};
-    room.collection('elements').getList().forEach(elem => {
-      elementColors[elem.name] = elem.color;
-      const styleSheet = document.createElement('style');
-      styleSheet.textContent = `.element-${elem.name} { color: ${elem.color}; }`;
-      document.head.appendChild(styleSheet);
-    });
-
-    const elements = [weapon.element].concat(weapon.optionalElement1 || [], weapon.optionalElement2 || []).filter(Boolean);
-    
-    let gradient, color;
-    if (elements.length > 0) {
-      const colors = elements.map(e => elementColors[e] || '#ffffff');
-      gradient = colors.length === 1 
-        ? `linear-gradient(45deg, ${colors[0]}, ${colors[0]})`
-        : `linear-gradient(45deg, ${colors.join(', ')})`;
-      color = colors[0];
-    } else {
-      gradient = 'linear-gradient(45deg, #ffffff, #ffffff)';
-      color = '#ffffff';
-    }
-
-    const cardStyle = document.createElement('style');
-    cardStyle.textContent = `
-      .weapon-card.rarity-Transcendent[data-weapon-id="${weapon.id}"],
-      .weapon-list-item.rarity-Transcendent[data-weapon-id="${weapon.id}"] {
-        --transcendent-gradient: ${gradient};
-        --transcendent-color: ${color};
-        --transcendent-glow: rgba(255,255,255,0.4);
-      }
-    `;
-    document.head.appendChild(cardStyle);
-  }
-
-  // Add helper function to convert hex to RGB
-  function adjustColor(color, percent) {
-    const num = parseInt(color.replace('#', ''), 16),
-          amt = Math.round(2.55 * percent),
-          R = (num >> 16) + amt,
-          G = (num >> 8 & 0x00FF) + amt,
-          B = (num & 0x0000FF) + amt;
-    return '#' + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
-  }
-
-  return html;
 }
 
 room.collection('weapons').subscribe(weapons => {
@@ -363,7 +234,7 @@ function displayWeapons(weapons) {
       const selectedSection = document.getElementById('selectedWeapon');
       const detailedCard = document.createElement('div');
       detailedCard.className = `weapon-card rarity-${weapon?.rarity || 'Common'}`;
-      detailedCard.innerHTML = createWeaponCard(weapon, true);
+      detailedCard.innerHTML = createWeaponCard(weapon, room, true);
       detailedCard.dataset.weaponId = weapon.id;
       selectedSection.innerHTML = '';
       selectedSection.appendChild(detailedCard);
@@ -371,6 +242,7 @@ function displayWeapons(weapons) {
     library.appendChild(item);
   });
 }
+
 function updateWeaponBattleLogs(weaponId) {
   const logContainer = document.querySelector(`.weapon-battle-logs[data-weapon-id="${weaponId}"] .battle-logs-list`);
   if (!logContainer) return;
@@ -535,6 +407,7 @@ async function startBattle() {
     document.getElementById('battleLoading').style.display = 'none';
   }
 }
+
 function getRarityColor(rarity) {
   const colors = {
     'Common': '#a0a0a0',
@@ -548,6 +421,7 @@ function getRarityColor(rarity) {
   };
   return colors[rarity];
 }
+
 async function startTeamBattle() {
   const invalidTeams = teams.filter(team => team.fighters.length === 0);
   if (invalidTeams.length > 0) {
@@ -698,6 +572,7 @@ async function startTeamBattle() {
     document.getElementById('battleLoading').style.display = 'none';
   }
 }
+
 function colorize(text, weapons) {
   let colorized = text;
   weapons.forEach(weapon => {
@@ -706,6 +581,7 @@ function colorize(text, weapons) {
   });
   return colorized;
 }
+
 let teams = [{
   id: 'alpha',
   name: 'Alpha',
@@ -717,6 +593,7 @@ let teams = [{
   fighters: [null, null, null],
   defaultWeapon: null
 }];
+
 function setDefaultWeapon(teamId, weaponId) {
   const team = teams.find(t => t.id === teamId);
   if (team) {
@@ -725,6 +602,7 @@ function setDefaultWeapon(teamId, weaponId) {
     renderTeams();
   }
 }
+
 function createTeamElement(team, index, savedSelections) {
   const teamDiv = document.createElement('div');
   teamDiv.className = 'team-section';
@@ -760,10 +638,11 @@ function createTeamElement(team, index, savedSelections) {
       `).join('')}
     </div>
     <button class="add-fighter-btn" onclick="addFighter('${team.id}')">Add Fighter</button>
-    ${index > 1 ? `<button class="remove-team-btn" onclick="removeTeam='${team.id}'">Remove Team</button>` : ''}
+    ${index > 1 ? `<button class="remove-team-btn" onclick="removeTeam('${team.id}')">Remove Team</button>` : ''}
   `;
   return teamDiv;
 }
+
 function renderTeams() {
   const savedSelections = getTeamWeaponSelections();
   const container = document.getElementById('teamsContainer');
@@ -781,6 +660,7 @@ function renderTeams() {
     });
   });
 }
+
 function addTeam() {
   const id = `team${teams.length + 1}`;
   teams.push({
@@ -791,10 +671,12 @@ function addTeam() {
   });
   renderTeams();
 }
+
 function removeTeam(teamId) {
   teams = teams.filter(team => team.id !== teamId);
   renderTeams();
 }
+
 function addFighter(teamId) {
   const team = teams.find(t => t.id === teamId);
   if (team) {
@@ -802,6 +684,7 @@ function addFighter(teamId) {
     renderTeams();
   }
 }
+
 function removeFighter(teamId, fighterIndex) {
   const team = teams.find(t => t.id === teamId);
   if (team && team.fighters.length > 1) {
@@ -809,6 +692,7 @@ function removeFighter(teamId, fighterIndex) {
     renderTeams();
   }
 }
+
 function renameTeam(teamId, newName) {
   const team = teams.find(t => t.id === teamId);
   if (team) {
@@ -816,6 +700,7 @@ function renameTeam(teamId, newName) {
     renderTeams();
   }
 }
+
 function getTeamWeaponSelections() {
   return teams.map(team => ({
     id: team.id,
@@ -826,6 +711,7 @@ function getTeamWeaponSelections() {
     })
   }));
 }
+
 async function sendMessage() {
   const input = document.getElementById('chatInput');
   const message = input.value.trim();
@@ -842,8 +728,10 @@ async function sendMessage() {
     }
   }
 }
+
 let lastReadMessageTime = new Date();
 let chatVisible = false;
+
 room.collection('chat').subscribe(messages => {
   const chatMessages = document.getElementById('chatMessages');
   if (!chatMessages) return;
@@ -869,11 +757,13 @@ room.collection('chat').subscribe(messages => {
     }
   }
 });
+
 document.getElementById('chatInput').addEventListener('keypress', e => {
   if (e.key === 'Enter') {
     sendMessage();
   }
 });
+
 async function deleteWeapon(weaponId) {
   if (confirm('Are you sure you want to delete this weapon?')) {
     try {
@@ -884,6 +774,7 @@ async function deleteWeapon(weaponId) {
     }
   }
 }
+
 function getElementEmoji(element) {
   const elementMap = {
     'None': '',
@@ -917,8 +808,10 @@ function getElementEmoji(element) {
   });
   return customElements[element] || elementMap[element] || '';
 }
+
 let customElements = {};
 let customFunctions = new Set();
+
 async function addNewElement() {
   if (room.party.client.username !== 'lak04171') return;
   const name = document.getElementById('newElementName').value.trim();
@@ -937,6 +830,7 @@ async function addNewElement() {
   document.getElementById('newElementColor').value = '';
   document.getElementById('newElementEmoji').value = '';
 }
+
 async function addNewFunction() {
   if (room.party.client.username !== 'lak04171') return;
   const name = document.getElementById('newFunctionName').value.trim();
@@ -949,6 +843,7 @@ async function addNewFunction() {
   });
   document.getElementById('newFunctionName').value = '';
 }
+
 room.collection('elements').subscribe(elements => {
   elements.forEach(elem => {
     customElements[elem.name] = elem.emoji;
@@ -969,6 +864,7 @@ room.collection('elements').subscribe(elements => {
     });
   }
 });
+
 room.collection('functions').subscribe(functions => {
   functions.forEach(func => {
     customFunctions.add(func.name);
@@ -985,6 +881,7 @@ room.collection('functions').subscribe(functions => {
     });
   }
 });
+
 function updateElementSelects() {
   const elementSelects = [document.getElementById('weaponElement'), document.getElementById('optionalElement1'), document.getElementById('optionalElement2')];
   elementSelects.forEach(select => {
@@ -1099,6 +996,7 @@ function updateElementSelects() {
     }
   });
 }
+
 function updateFunctionSelects() {
   const functionSelects = [document.getElementById('weaponType'), document.getElementById('optionalWeaponType1'), document.getElementById('optionalWeaponType2')];
   functionSelects.forEach(select => {
@@ -1127,6 +1025,7 @@ function updateFunctionSelects() {
     }
   });
 }
+
 function showAdminButton() {
   const adminBtn = document.querySelector('.admin-mode-btn');
   const adminToggle = document.querySelector('.admin-toggle');
@@ -1142,6 +1041,7 @@ function showAdminButton() {
     }
   });
 }
+
 function toggleChat() {
   const chatContainer = document.querySelector('.chat-container');
   const chatToggle = document.querySelector('.chat-toggle');
@@ -1156,6 +1056,7 @@ function toggleChat() {
     const lastReadMessageTime = new Date();
   }
 }
+
 async function removeElement() {
   if (room.party.client.username !== 'lak04171') return;
   const elementSelect = document.getElementById('elementToRemove');
@@ -1173,6 +1074,7 @@ async function removeElement() {
     alert('Failed to remove element');
   }
 }
+
 async function submitSuggestion() {
   const input = document.getElementById('suggestionInput');
   const suggestion = input.value.trim();
@@ -1184,6 +1086,7 @@ async function submitSuggestion() {
     input.value = '';
   }
 }
+
 async function removeFunction() {
   if (room.party.client.username !== 'lak04171') return;
   const functionSelect = document.getElementById('functionToRemove');
@@ -1201,6 +1104,7 @@ async function removeFunction() {
     alert('Failed to remove function');
   }
 }
+
 function toggleAdminDropdown() {
   const dropdownContent = document.querySelector('.admin-dropdown-content');
   dropdownContent.classList.toggle('show');
@@ -1215,7 +1119,9 @@ function toggleAdminDropdown() {
     }
   };
 }
+
 showAdminButton();
+
 function editWeapon(weaponId) {
   const weapons = room.collection('weapons').getList();
   const weapon = weapons.find(w => w.id === weaponId);
@@ -1238,6 +1144,7 @@ function editWeapon(weaponId) {
     behavior: 'smooth'
   });
 }
+
 room.collection('suggestions').subscribe(suggestions => {
   displaySuggestions(suggestions);
   suggestions.forEach(suggestion => {
@@ -1252,6 +1159,7 @@ room.collection('suggestions').subscribe(suggestions => {
     }
   });
 });
+
 function arraysEqual(a, b) {
   if (a === b) return true;
   if (a == null || b == null) return false;
@@ -1261,6 +1169,7 @@ function arraysEqual(a, b) {
   }
   return true;
 }
+
 async function addSuggestionTag(suggestionId, tag) {
   if (room.party.client.username !== 'lak04171') return;
   const suggestion = room.collection('suggestions').getList().find(s => s.id === suggestionId);
@@ -1275,6 +1184,7 @@ async function addSuggestionTag(suggestionId, tag) {
     displaySuggestions(suggestions);
   }
 }
+
 async function removeSuggestionTag(suggestionId, tag) {
   if (room.party.client.username !== 'lak04171') return;
   const suggestion = room.collection('suggestions').getList().find(s => s.id === suggestionId);
@@ -1290,6 +1200,7 @@ async function removeSuggestionTag(suggestionId, tag) {
     displaySuggestions(suggestions);
   }
 }
+
 function displaySuggestions(suggestions) {
   const suggestionsList = document.getElementById('suggestionsList');
   if (!suggestionsList) return;
@@ -1349,6 +1260,7 @@ function displaySuggestions(suggestions) {
     `;
   }).join('');
 }
+
 room.collection('suggestion-likes').subscribe(() => {
   const suggestions = room.collection('suggestions').getList();
   const suggestionsList = document.getElementById('suggestionsList');
@@ -1361,6 +1273,7 @@ room.collection('suggestion-likes').subscribe(() => {
     });
   }
 });
+
 room.collection('suggestion-comments').subscribe(() => {
   const suggestions = room.collection('suggestions').getList();
   const suggestionsList = document.getElementById('suggestionsList');
@@ -1373,6 +1286,7 @@ room.collection('suggestion-comments').subscribe(() => {
     });
   }
 });
+
 async function publishUpdate() {
   if (room.party.client.username !== 'lak04171') return;
   const formState = {
@@ -1396,6 +1310,7 @@ async function publishUpdate() {
   });
   window.location.href = 'https://websim.ai/p/bwkafqvj9rnx8oeljz73';
 }
+
 room.collection('updates').subscribe(updates => {
   const latestUpdate = updates[updates.length - 1];
   if (latestUpdate?.type === 'redirect' && latestUpdate.timestamp > localStorage.getItem('lastUpdateTimestamp')) {
@@ -1417,6 +1332,7 @@ room.collection('updates').subscribe(updates => {
     window.location.href = latestUpdate.url;
   }
 });
+
 async function publishBattleLog(battleDesc, winner, teams = null) {
   const location = teams ? document.getElementById('teamBattleLocation').value : document.getElementById('battleLocation').value;
   const goreLevel = document.getElementById('goreIntensity').value;
@@ -1494,6 +1410,7 @@ room.collection('weapons').subscribe(weapons => {
     }
   }
 });
+
 function summarizeBattleHistory(battleLogs) {
   if (!battleLogs || battleLogs.length === 0) {
     return "No previous battle experience";
@@ -1504,6 +1421,7 @@ function summarizeBattleHistory(battleLogs) {
   
   return `${battleLogs.length} battles fought with a ${winRate}% win rate. Fighter has shown ${victories > battleLogs.length / 2 ? 'great prowess' : 'room for improvement'} in combat.`;
 }
+
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('weaponSearch');
   if (searchInput) {
@@ -1520,6 +1438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
 async function addComment(suggestionId) {
   const input = document.getElementById(`comment-${suggestionId}`);
   const text = input.value.trim();
@@ -1532,6 +1451,7 @@ async function addComment(suggestionId) {
     input.value = '';
   }
 }
+
 async function toggleLike(suggestionId) {
   const existingLike = room.collection('suggestion-likes').getList().find(l => l.suggestionId === suggestionId && l.username === room.party.client.username);
   if (existingLike) {
@@ -1544,6 +1464,7 @@ async function toggleLike(suggestionId) {
     });
   }
 }
+
 function updateMergeWeaponSelects() {
   const weapons = room.collection('weapons').getList();
   const visibleWeapons = weapons.filter(weapon => {
@@ -1563,6 +1484,7 @@ function updateMergeWeaponSelects() {
     });
   });
 }
+
 function validateMergeSelection() {
   const weapon1 = document.getElementById('mergeWeapon1').value;
   const weapon2 = document.getElementById('mergeWeapon2').value;
@@ -1571,6 +1493,7 @@ function validateMergeSelection() {
     document.getElementById('mergeWeapon2').value = '';
   }
 }
+
 function updateTeamWeaponSelects() {
   const weapons = room.collection('weapons').getList();
   const visibleWeapons = weapons.filter(weapon => {
@@ -1612,6 +1535,7 @@ function updateTeamWeaponSelects() {
     });
   }
 }
+
 function toggleBattleMode(mode) {
   const duelMode = document.getElementById('duelMode');
   const teamMode = document.getElementById('teamMode');
@@ -1630,6 +1554,7 @@ function toggleBattleMode(mode) {
     renderTeams();
   }
 }
+
 let playerInventory = [];
 let currentLocation = '';
 let adventureState = {
@@ -1639,6 +1564,7 @@ let adventureState = {
   weaponsFound: 0,
   isEnded: false
 };
+
 async function mergeWeapons() {
   const weapon1Id = document.getElementById('mergeWeapon1').value;
   const weapon2Id = document.getElementById('mergeWeapon2').value;
@@ -1696,7 +1622,7 @@ async function mergeWeapons() {
     const mergeResult = document.getElementById('mergeResult');
     const newWeaponCard = document.createElement('div');
     newWeaponCard.className = `weapon-card rarity-${result.result.rarity}`;
-    newWeaponCard.innerHTML = createWeaponCard(result.result);
+    newWeaponCard.innerHTML = createWeaponCard(result.result, room);
     mergeResult.innerHTML = '<h3>Merged Result:</h3>';
     mergeResult.appendChild(newWeaponCard);
     document.getElementById('mergeWeapon1').value = '';
@@ -1708,6 +1634,7 @@ async function mergeWeapons() {
     document.getElementById('loading').style.display = 'none';
   }
 }
+
 room.collection('weapon-comments').subscribe(comments => {
   const weapons = room.collection('weapons').getList();
   const selectedWeapon = document.getElementById('selectedWeapon');
@@ -1719,6 +1646,7 @@ room.collection('weapon-comments').subscribe(comments => {
     }
   }
 });
+
 function updateWeaponComments(weaponId, comments) {
   const weaponComments = document.querySelector(`.weapon-comments[data-weapon-id="${weaponId}"]`);
   if (!weaponComments) return;
@@ -1738,6 +1666,7 @@ function updateWeaponComments(weaponId, comments) {
     `).join('')}
   `;
 }
+
 async function addWeaponComment(weaponId) {
   const input = document.querySelector(`.weapon-comments[data-weapon-id="${weaponId}"] .weapon-comment-input`);
   const text = input.value.trim();
@@ -1750,6 +1679,7 @@ async function addWeaponComment(weaponId) {
     input.value = '';
   }
 }
+
 function updateWeaponSelects() {
   const weapons = room.collection('weapons').getList();
   const visibleWeapons = weapons.filter(weapon => {
@@ -1791,6 +1721,7 @@ function updateWeaponSelects() {
     });
   }
 }
+
 function switchMode(mode) {
   const body = document.body;
   const inputSection = document.querySelector('.input-section');
@@ -1866,6 +1797,7 @@ function switchMode(mode) {
       break;
   }
 }
+
 async function downloadWeapon(weaponId) {
   const weapons = room.collection('weapons').getList();
   const weapon = weapons.find(w => w.id === weaponId);
@@ -1928,7 +1860,7 @@ function viewWeaponStats(index) {
     statsDiv.dataset.currentIndex = '';
     return;
   }
-  let html = createWeaponCard(weapon, true);
+  let html = createWeaponCard(weapon, room, true);
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = html;
   const deleteBtn = tempDiv.querySelector('.delete-btn');
@@ -1937,6 +1869,7 @@ function viewWeaponStats(index) {
   statsDiv.classList.add('visible');
   statsDiv.dataset.currentIndex = index;
 }
+
 async function startNewAdventure() {
   document.getElementById('adventureText').innerHTML = 'Starting adventure...';
   document.getElementById('customAction').disabled = false;
@@ -2011,6 +1944,7 @@ async function startNewAdventure() {
     document.getElementById('adventureText').innerHTML = 'Error starting adventure. Please try again.';
   }
 }
+
 document.getElementById('startingWeaponChoice')?.addEventListener('change', e => {
   const specificWeaponSelect = document.getElementById('specificWeapon');
   specificWeaponSelect.style.display = e.target.value === 'choose' ? 'inline-block' : 'none';
@@ -2026,6 +1960,7 @@ document.getElementById('startingWeaponChoice')?.addEventListener('change', e =>
     });
   }
 });
+
 function updateInventory() {
   const inventoryDiv = document.getElementById('inventoryList');
   inventoryDiv.innerHTML = playerInventory.map((weapon, index) => `
@@ -2035,6 +1970,7 @@ function updateInventory() {
   `).join('');
   document.getElementById('selectedWeaponStats').classList.remove('visible');
 }
+
 async function submitCustomAction() {
   const actionInput = document.getElementById('customAction');
   const submitBtn = document.getElementById('submitActionBtn');
@@ -2167,33 +2103,7 @@ async function submitCustomAction() {
     document.getElementById('selectedWeaponStats').classList.remove('visible');
   }
 }
-function updateMergeWeaponSelects() {
-  const weapons = room.collection('weapons').getList();
-  const visibleWeapons = weapons.filter(weapon => {
-    return !weapon.isPrivate || weapon.creatorId === room.party.client.id;
-  });
-  const selects = [document.getElementById('mergeWeapon1'), document.getElementById('mergeWeapon2')];
-  selects.forEach(select => {
-    if (!select) return;
-    select.value = '';
-    select.innerHTML = '<option value="">Select a Weapon</option>';
-    visibleWeapons.forEach(weapon => {
-      const option = document.createElement('option');
-      option.value = weapon.id;
-      option.className = `rarity-${weapon.rarity}`;
-      option.textContent = weapon.name;
-      select.appendChild(option);
-    });
-  });
-}
-function validateMergeSelection() {
-  const weapon1 = document.getElementById('mergeWeapon1').value;
-  const weapon2 = document.getElementById('mergeWeapon2').value;
-  if (weapon1 && weapon2 && weapon1 === weapon2) {
-    alert('You cannot select the same weapon twice for merging!');
-    document.getElementById('mergeWeapon2').value = '';
-  }
-}
+
 async function submitCode() {
   const code = document.getElementById('codeInput').value.trim().toLowerCase();
   switch (code) {
@@ -2230,4 +2140,3 @@ async function submitCode() {
   }
   document.getElementById('codeInput').value = '';
 }
-
